@@ -181,10 +181,10 @@ data ScoreBlock
 -}
 
 -- | A Lilypond music expression.
---   
+--
 --   Use the 'Pretty' instance to convert into Lilypond syntax.
---   
-data Music    
+--
+data Music
     = Rest (Maybe Duration) [PostEvent]             -- ^ Single rest.
     | Note Note (Maybe Duration) [PostEvent]        -- ^ Single note.
     | Chord [(Note, [ChordPostEvent])] (Maybe Duration) [PostEvent]     -- ^ Single chord.
@@ -202,23 +202,31 @@ data Music
     | Tempo (Maybe String) (Maybe (Duration,Integer)) -- ^ Tempo mark.
     | New String (Maybe String) Music               -- ^ New expression.
     | Context String (Maybe String) Music           -- ^ Context expression.
-    | Set String Value                            
+    | Set String Value
+    | Field String Value
     | Override String Value
     | Revert String
+    | Tuplet Int Int Music
+    | Partial Int Music
+    | Slash1 String
+    | Slash String Music
     deriving (Eq, Show)
 
 foldMusic :: (Music -> Music) -> Music -> Music
 foldMusic f = go
     where
-        go (Sequential ms)      = Sequential (fmap go ms)                          
-        go (Simultaneous b ms)  = Simultaneous b (fmap go ms)                     
-        go (Repeat b i m qmm)   = Repeat b i m (fmap (go *** go) qmm)  
-        go (Tremolo n m)        = Tremolo n (go m)                             
-        go (Times r m)          = Times r (go m)                          
-        go (Transpose p p2 m)   = Transpose p p2 (go m)                   
-        go (Relative p m)       = Relative p (go m)                          
-        go (New s v m)          = New s v (go m)               
+        go (Sequential ms)      = Sequential (fmap go ms)
+        go (Simultaneous b ms)  = Simultaneous b (fmap go ms)
+        go (Repeat b i m qmm)   = Repeat b i m (fmap (go *** go) qmm)
+        go (Tremolo n m)        = Tremolo n (go m)
+        go (Times r m)          = Times r (go m)
+        go (Transpose p p2 m)   = Transpose p p2 (go m)
+        go (Relative p m)       = Relative p (go m)
+        go (New s v m)          = New s v (go m)
         go (Context s v m)      = Context s v (go m)
+        go (Slash s m) = Slash s (go m)
+        go (Tuplet p q m) = Tuplet p q (go m)
+        go (Partial p m) = Partial p (go m)
         go x = f x
 
 foldMusic' :: (Music -> Music) -- Rest Note Chord
@@ -226,7 +234,7 @@ foldMusic' :: (Music -> Music) -- Rest Note Chord
            -> (Music -> Music) -- Recursive
            -> Music -> Music
 foldMusic' f g h = go
-    where               
+    where
         go m@(Rest _ _)           = f m
         go m@(Note _ _ _)         = f m
         go m@(Chord _ _ _)        = f m
@@ -236,10 +244,11 @@ foldMusic' f g h = go
         go m@(Breathe _)          = g m
         go m@(Tempo _ _)          = g m
         go m@(Set _ _)            = g m
+        go m@(Field _ _)            = g m
         go m@(Override _ _)       = g m
         go m@(Revert _)           = g m
-        go (Sequential ms)      = Sequential (fmap h ms)                          
-        go (Simultaneous b ms)  = Simultaneous b (fmap h ms)                     
+        go (Sequential ms)      = Sequential (fmap h ms)
+        go (Simultaneous b ms)  = Simultaneous b (fmap h ms)
         go (Repeat b i m qmm)   = Repeat b i m (fmap (h *** h) qmm)  
         go (Tremolo n m)        = Tremolo n (h m)                             
         go (Times r m)          = Times r (h m)                          
@@ -247,7 +256,10 @@ foldMusic' f g h = go
         go (Relative p m)       = Relative p (h m)                          
         go (New s v m)          = New s v (h m)               
         go (Context s v m)      = Context s v (h m)
-
+        go (Tuplet n m x)     = Tuplet n m (h x)
+        go (Partial n x)     = Partial n (h x)
+        go (Slash s m)          = Slash s (h m)
+        go m@(Slash1 _)          = g m
 
 instance Pretty Music where
     pretty (Rest d p)       = "r" <> pretty d <> prettyList p
@@ -267,7 +279,7 @@ instance Pretty Music where
         where 
             unf p = if p then "unfold" else "volta"
             alt Nothing      = empty
-            alt (Just (x,y)) = "\\alternative" <> pretty x <> pretty y
+            alt (Just (x,y)) = "\\alternative" <> pretty (Sequential [x, y]) -- pretty x <> pretty y
 
     pretty (Tremolo n x) =
         "\\repeat tremolo" <+> pretty n <=> pretty x
@@ -309,11 +321,24 @@ instance Pretty Music where
     pretty (Set name val) =
         "\\set" <+> string name <+> "=" <+> pretty val
 
+    pretty (Field name val) =
+        string name <+> "=" <+> pretty val
+
     pretty (Override name val) =
         "\\override" <+> string name <+> "=" <+> pretty val
 
     pretty (Revert name) =
         "\\revert" <+> string name
+    pretty (Tuplet p q inner) =
+      "\\tuplet" <+> string (show p `mappend` "/" `mappend` show q) <+> pretty inner
+
+    pretty (Partial p inner) =
+      "\\partial" <+> pretty p <+> pretty inner
+
+    pretty (Slash1 name) =
+        "\\" <> string name
+    pretty (Slash name inner) =
+        ("\\" <> string name) <+> pretty inner
 
     -- pretty _                        = notImpl "Unknown music expression"
 
@@ -407,6 +432,7 @@ data PostEvent
     | EndCrescDim
     | Text Direction String
     | Markup Direction Markup
+    | TremoloS Int
     deriving (Eq, Show)
 
 instance Pretty PostEvent where 
@@ -425,6 +451,7 @@ instance Pretty PostEvent where
     pretty EndCrescDim          = "\\!"
     pretty (Text d s)           = pretty d <> (string . show) s -- add quotes
     pretty (Markup d m)         = pretty d <> ("\\markup" <+> pretty m)
+    pretty (TremoloS n)         = ":" <> pretty n
     prettyList                  = hcat . fmap pretty
 
 data Markup

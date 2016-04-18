@@ -210,6 +210,7 @@ data Music
     | Partial Int Music
     | Slash1 String
     | Slash String Music
+    | Raw String
     deriving (Eq, Show)
 
 foldMusic :: (Music -> Music) -> Music -> Music
@@ -260,6 +261,7 @@ foldMusic' f g h = go
         go (Partial n x)     = Partial n (h x)
         go (Slash s m)          = Slash s (h m)
         go m@(Slash1 _)          = g m
+        go r@(Raw _) = f r
 
 instance Pretty Music where
     pretty (Rest d p)       = "r" <> pretty d <> prettyList p
@@ -339,6 +341,8 @@ instance Pretty Music where
         "\\" <> string name
     pretty (Slash name inner) =
         ("\\" <> string name) <+> pretty inner
+
+    pretty (Raw r) = string r
 
     -- pretty _                        = notImpl "Unknown music expression"
 

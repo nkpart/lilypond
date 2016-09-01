@@ -16,14 +16,14 @@
 module Data.Music.Lilypond.Pitch (
         Pitch(..),
         PitchName(..),
-        Accidental(..),
-        Octaves(..),
+        Accidental,
+        Octaves,
         Mode(..),
         OctaveCheck(..),
   ) where
 
 import Text.Pretty hiding (Mode)
-import Music.Pitch.Literal
+import Music.Pitch.Literal hiding (a, c)
 
 data PitchName = C | D | E | F | G | A | B
     deriving (Eq, Ord, Show, Enum)

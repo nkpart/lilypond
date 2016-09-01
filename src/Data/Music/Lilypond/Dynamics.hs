@@ -57,7 +57,7 @@ instance IsDynamics Dynamics where
         2.5    -> FF
         3.5    -> FFF
         4.5    -> FFFF
-        x      -> error $ "Lilypond.Dynamics: Strange value " ++ show x
+        z      -> error $ "Lilypond.Dynamics: Strange value " ++ show z
     fromDynamics _ = error "Lilypond.Dynamics: Unsupported literal"
 
 

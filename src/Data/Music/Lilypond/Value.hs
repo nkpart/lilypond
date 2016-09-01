@@ -24,7 +24,6 @@ module Data.Music.Lilypond.Value (
 
 import Data.String
 import Text.Pretty hiding (Mode)
-import Music.Pitch.Literal
 
 -- | 
 -- Value of a @\\set@ command.

@@ -53,8 +53,8 @@ module Data.Music.Lilypond (
         -- ** Pitch
         Pitch(..),
         PitchName(..),
-        Accidental(..),
-        Octaves(..),
+        Accidental,
+        Octaves,
 
         -- * Constructing Lilypond expresions
         -- ** Notes and rests
@@ -140,14 +140,14 @@ module Data.Music.Lilypond (
     )
 where
 
-import Control.Arrow ((<<<), (***), first, second)
+import Control.Arrow ((<<<), (***), second)
 import Data.Ratio
 import Data.String
 import Data.Default
 import Data.Semigroup
 import Data.VectorSpace
 import Text.Pretty hiding (Mode)
-import Music.Pitch.Literal
+import Music.Pitch.Literal hiding (a,b,c,d,e,f,g, as, bs, cs, ds, es, fs, gs)
 
 -- import System.Process -- TODO debug
 
@@ -281,7 +281,7 @@ instance Pretty Music where
         where 
             unf p = if p then "unfold" else "volta"
             alt Nothing      = empty
-            alt (Just (x,y)) = "\\alternative" <> pretty (Sequential [x, y]) -- pretty x <> pretty y
+            alt (Just (a,b)) = "\\alternative" <> pretty (Sequential [a, b]) -- pretty x <> pretty y
 
     pretty (Tremolo n x) =
         "\\repeat tremolo" <+> pretty n <=> pretty x
@@ -289,7 +289,7 @@ instance Pretty Music where
     pretty (Times n x) = 
         "\\times" <+> frac n <=> pretty x
         where
-            frac n = pretty (numerator n) <> "/" <> pretty (denominator n)
+            frac z = pretty (numerator z) <> "/" <> pretty (denominator z)
 
     pretty (Transpose from to x) =
         "\\transpose" <+> pretty from <=> pretty to <=> pretty x
@@ -304,7 +304,7 @@ instance Pretty Music where
     pretty (Time m n) = "\\time" <+> (pretty m <> "/" <> pretty n)
     
     pretty (Breathe Nothing) = "\\breathe"
-    pretty (Breathe a)       = notImpl "Non-standard breath marks"
+    pretty (Breathe _)       = notImpl "Non-standard breath marks"
 
     pretty (Tempo Nothing Nothing)           = mempty
     pretty (Tempo (Just t) Nothing)          = "\\time" <+> pretty t
@@ -361,7 +361,7 @@ instance VectorSpace Music where
     a *^ (Rest  (Just d) p)     = Rest (Just $ a*d) p
     a *^ (Note  n (Just d) p)   = Note n (Just $ a*d) p
     a *^ (Chord ns (Just d) p)  = Chord ns (Just $ a*d) p
-    a *^ x                      = x
+    _ *^ x                      = x
 
 
 data Note
@@ -371,7 +371,7 @@ data Note
 
 instance Pretty Note where
     pretty (NotePitch p Nothing)   = pretty p
-    pretty (NotePitch p _)         = notImpl "Non-standard pitch"
+    pretty (NotePitch _ _)         = notImpl "Non-standard pitch"
     pretty (DrumNotePitch _)       = notImpl "Non-standard pitch"
     prettyList                     = hsep . fmap pretty
 
@@ -685,7 +685,7 @@ a `sequential` Sequential bs             = Sequential ([a] <> bs)
 a `sequential` b                         = Sequential ([a,b])
 
 simultaneous :: Music -> Music -> Music
-Simultaneous s as `simultaneous` Simultaneous t bs = Simultaneous True (as <> bs)
+Simultaneous _ as `simultaneous` Simultaneous _ bs = Simultaneous True (as <> bs)
 Simultaneous s as `simultaneous` b                 = Simultaneous s (as <> [b])
 a `simultaneous` Simultaneous t bs                 = Simultaneous t ([a] <> bs)
 a `simultaneous` b                                 = Simultaneous True ([a,b])
@@ -695,9 +695,9 @@ a `simultaneous` b                                 = Simultaneous True ([a,b])
 addPost :: PostEvent -> Music -> Music
 addPost a = foldMusic' (addPost' a) id (addPost a)
   where
-    addPost' a (Rest d es)     = Rest d (es ++ [a])
-    addPost' a (Note n d es)   = Note n d (es ++ [a])
-    addPost' a (Chord ns d es) = Chord ns d (es ++ [a])
+    addPost' x (Rest d es)     = Rest d (es ++ [x])
+    addPost' x (Note n d es)   = Note n d (es ++ [x])
+    addPost' x (Chord ns d es) = Chord ns d (es ++ [x])
 
 addText :: String -> Music -> Music
 addText s = addPost (Text def s)
@@ -879,20 +879,20 @@ addVarCoda = addArticulation VarCoda
 
 
 -- Specifics (TODO I/O)
-data NoteHeadStyle
-  = DefaultNoteHead
-  | AltDefaultNoteHead -- Same as default, except printing of breves
-  | BaroqueNoteHead
-  | NeomensuralNoteHead
-  | PetrucciNoteHead
-  | HarmonicNoteHead
-  | HarmonicBlackNoteHead
-  | HarmonicMixedNoteHead
-  | DiamondNoteHead
-  | CrossNoteHead
-  | XCircleNoteHead
-  | TriangleNoteHead
-  | SlashNoteHead
+-- data NoteHeadStyle
+--   = DefaultNoteHead
+--   | AltDefaultNoteHead -- Same as default, except printing of breves
+--   | BaroqueNoteHead
+--   | NeomensuralNoteHead
+--   | PetrucciNoteHead
+--   | HarmonicNoteHead
+--   | HarmonicBlackNoteHead
+--   | HarmonicMixedNoteHead
+--   | DiamondNoteHead
+--   | CrossNoteHead
+--   | XCircleNoteHead
+--   | TriangleNoteHead
+--   | SlashNoteHead
   
   
 
@@ -916,20 +916,17 @@ removeSingleChords = foldMusic go
 notImpl :: String -> a
 notImpl a = error $ "Not implemented: " ++ a
 
-asPitch = id
-asPitch :: Pitch -> Pitch
-
 -- | Separate a dotted note into an undotted note-value and number of dots.
 separateDots :: Duration -> (Duration, Int)
 separateDots = separateDots' [2/3, 6/7, 14/15, 30/31, 62/63]
 
 separateDots' :: [Duration] -> Duration -> (Duration, Int)
-separateDots' []         nv = error "separateDots: Strange"
-separateDots' (div:divs) nv 
-    | isDivisibleBy 2 nv = (nv,  0)
+separateDots' []         _ = error "separateDots: Strange"
+separateDots' (div':divs) nv 
+    | isDivisibleBy (2::Int) nv = (nv,  0)
     | otherwise          = (nv', dots' + 1)
     where                                                        
-        (nv', dots')    = separateDots' divs (nv*div)
+        (nv', dots')    = separateDots' divs (nv*div')
 
 logBaseR :: forall a . (RealFloat a, Floating a) => Rational -> Rational -> a
 logBaseR k n 
@@ -939,11 +936,14 @@ logBaseR k n
 logBaseR k n                         = logBase (fromRational k) (fromRational n)
 
 isDivisibleBy :: (Real a, Real b) => a -> b -> Bool
-isDivisibleBy n = (equalTo 0.0) . snd . properFraction . logBaseR (toRational n) . toRational
+isDivisibleBy n = (equalTo (0.0::Double)) . snd . asInt . properFraction . logBaseR (toRational n) . toRational
+  where asInt :: (Int, a) -> (Int, a)
+        asInt = id
 
 equalTo :: Eq a => a -> a -> Bool
 equalTo  = (==)
 
 infixl <=>
+(<=>) :: Printer -> Printer -> Printer
 a <=> b = sep [a,b]
 
